@@ -1,0 +1,133 @@
+{
+  "name": "MailPilot — Email Intake",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mailpilot-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "f4676259-4ec3-4f73-8ef7-75e41d52da1b",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-500, 0],
+      "webhookId": "c985f9c1-c4ad-45f5-88ad-4f786c945c6b"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e81707e9-8d73-461d-9acb-4d6784663d18",
+              "name": "external_message_id",
+              "value": "={{ typeof $json.body?.external_message_id === 'string' ? $json.body.external_message_id.trim() : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "9f5a0614-903a-4fb8-a963-cd99409b715e",
+              "name": "sender",
+              "value": "={{ typeof $json.body?.sender === 'string' ? $json.body.sender.trim() : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "420f6f45-2731-47a8-a8a2-2d0b9c976c24",
+              "name": "subject",
+              "value": "={{ typeof $json.body?.subject === 'string' ? $json.body.subject.trim() : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "88bb3950-d2fd-4ab7-861f-c26f7ef2461f",
+              "name": "body",
+              "value": "={{ typeof $json.body?.body === 'string' ? $json.body.body.trim() : '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "eeff8fb0-eb3f-422c-a50a-4a238903da0d",
+      "name": "Normalize Email",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-260, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0917f5e6-b79b-4acb-871b-c55374988ee1",
+              "leftValue": "={{ $json.sender }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }
+            },
+            {
+              "id": "e8441bc2-9668-467d-9d6f-992e81b5b51d",
+              "leftValue": "={{ $json.subject }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }
+            },
+            {
+              "id": "47dbd7d8-b2bc-4897-bfec-71c9ea18dc84",
+              "leftValue": "={{ $json.body }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "88aa4778-ec2f-4820-95bb-af53ec56ef82",
+      "name": "Required Fields Present?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-20, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, message: 'Email received and normalized', email: $json } }}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "89fd0a59-7759-4840-986f-e4b7df4bcadc",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [240, -100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, error: 'validation_error', message: 'sender, subject, and body must be non-empty strings', missing_fields: ['sender', 'subject', 'body'].filter(field => !$json[field]) } }}",
+        "options": { "responseCode": 400 }
+      },
+      "id": "6d75652d-f99f-48f4-a9f4-6e170508405d",
+      "name": "Respond Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [240, 100]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Normalize Email", "type": "main", "index": 0 }]] },
+    "Normalize Email": { "main": [[{ "node": "Required Fields Present?", "type": "main", "index": 0 }]] },
+    "Required Fields Present?": {
+      "main": [
+        [{ "node": "Respond Success", "type": "main", "index": 0 }],
+        [{ "node": "Respond Validation Error", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

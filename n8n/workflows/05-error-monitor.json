@@ -1,0 +1,97 @@
+{
+  "id": "p5ErrorMailPilot2026",
+  "name": "MailPilot — Error Monitor",
+  "active": true,
+  "nodes": [
+    {
+      "id": "9fbc89f7-6ecd-463d-8559-f326c768688b",
+      "name": "Workflow Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -440,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "d19161d2-aca1-419f-83d0-adfdd653fc2d",
+      "name": "Redact Failure Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -190,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst workflow = data.workflow || {};\nconst execution = data.execution || {};\nconst raw = String(execution.error?.message || data.trigger?.error?.message || data.error?.message || '');\nconst code = /timeout/i.test(raw) ? 'timeout' : /401|403|unauthori[sz]ed|credential/i.test(raw) ? 'authentication_error' : /429|rate.limit/i.test(raw) ? 'rate_limited' : /connect|ECONN/i.test(raw) ? 'connection_error' : 'workflow_error';\nconst summary = { timeout:'Workflow timed out', authentication_error:'Authentication failed', rate_limited:'Provider rate limit reached', connection_error:'Service connection failed', workflow_error:'Unexpected workflow execution failure' }[code];\nconst workflowID = String(workflow.id || 'unknown').slice(0,100);\nconst executionID = String(execution.id || '').slice(0,100);\nconst key = ['n8n',workflowID,executionID || String(execution.startedAt || data.timestamp || new Date().toISOString()),code].join(':').slice(0,255);\nreturn [{ json: { workflow_id:workflowID, workflow_name:String(workflow.name || 'Unknown workflow').slice(0,100), execution_id:executionID, error_code:code, error_message:summary, idempotency_key:key } }];"
+      }
+    },
+    {
+      "id": "e0a08c3f-e8ed-4b23-8e56-d4cd0f8e4db1",
+      "name": "Record Automation Failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        90,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MAILPILOT_API_URL + '/internal/automation/failures' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-MailPilot-Token",
+              "value": "={{ $env.MAILPILOT_INTERNAL_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    }
+  ],
+  "connections": {
+    "Workflow Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Redact Failure Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redact Failure Details": {
+      "main": [
+        [
+          {
+            "node": "Record Automation Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

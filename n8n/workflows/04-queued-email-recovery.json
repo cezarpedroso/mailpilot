@@ -1,0 +1,362 @@
+{
+  "id": "p5RecoveryMailPilot2026",
+  "name": "MailPilot — Queued Email Recovery",
+  "active": true,
+  "nodes": [
+    {
+      "id": "f4063a3c-8e1a-43c9-87ac-e4bf010e9d52",
+      "name": "Every 5 Minutes (Recovery)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -900,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d82eab53-2355-4229-8a30-f0d224e46247",
+      "name": "Get Retry Candidates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -680,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.MAILPILOT_API_URL + '/internal/automation/retry-candidates' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-MailPilot-Token",
+              "value": "={{ $env.MAILPILOT_INTERNAL_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "9cacb4a9-3035-424d-806f-e92cccb32e83",
+      "name": "Claim Retry Atomically",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -450,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MAILPILOT_API_URL + '/internal/automation/emails/' + $json.id + '/claim' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-MailPilot-Token",
+              "value": "={{ $env.MAILPILOT_INTERNAL_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ {} }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "aca8b9bd-3f18-41c7-8a3b-629be8da47ac",
+      "name": "Claim Granted?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -200,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "03533744-f631-4f91-86b6-439e1a346611",
+              "leftValue": "={{ $json.claim_token ? 'yes' : 'no' }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "0d5a96b4-b705-44c9-8ac1-c50cd3d0662b",
+      "name": "Retry Existing Intake",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        50,
+        -100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MAILPILOT_INTAKE_URL + '/webhook/mailpilot-intake' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-MailPilot-Token",
+              "value": "={{ $env.MAILPILOT_INTERNAL_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { email_id: $('Claim Retry Atomically').item.json.email_id, external_message_id: $('Claim Retry Atomically').item.json.external_message_id, sender: $('Claim Retry Atomically').item.json.sender, subject: $('Claim Retry Atomically').item.json.subject, body: $('Claim Retry Atomically').item.json.body } }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "e0a29dc8-9269-4e1e-8d22-e5fa1c09fc00",
+      "name": "Complete Recovery Attempt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        310,
+        -100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MAILPILOT_API_URL + '/internal/automation/emails/' + $('Claim Retry Atomically').item.json.email_id + '/complete' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-MailPilot-Token",
+              "value": "={{ $env.MAILPILOT_INTERNAL_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { claim_token: $('Claim Retry Atomically').item.json.claim_token, success: $json.success === true && $json.processing_status === 'processed', error_code: $json.error_code || ($json.error ? 'intake_error' : '') } }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "8fe64eda-332f-4dbd-833f-c406464eb98f",
+      "name": "Recovered?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        570,
+        -100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e9e3dafe-15e3-474c-85e3-a9d1392df0e6",
+              "leftValue": "={{ $json.recovered ? 'yes' : 'no' }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f73c1521-60ee-429e-8c17-90b066d11e77",
+      "name": "Recovery Recorded",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        810,
+        -200
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({ json: { status: item.json.status, attempt: item.json.attempt } }));"
+      }
+    },
+    {
+      "id": "80d2707d-8ef4-4647-8815-ce5375949d2b",
+      "name": "Backoff Recorded",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        810,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({ json: { status: item.json.status, attempt: item.json.attempt } }));"
+      }
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes (Recovery)": {
+      "main": [
+        [
+          {
+            "node": "Get Retry Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Retry Candidates": {
+      "main": [
+        [
+          {
+            "node": "Claim Retry Atomically",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim Retry Atomically": {
+      "main": [
+        [
+          {
+            "node": "Claim Granted?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim Granted?": {
+      "main": [
+        [
+          {
+            "node": "Retry Existing Intake",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Existing Intake": {
+      "main": [
+        [
+          {
+            "node": "Complete Recovery Attempt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Complete Recovery Attempt": {
+      "main": [
+        [
+          {
+            "node": "Recovered?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recovered?": {
+      "main": [
+        [
+          {
+            "node": "Recovery Recorded",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backoff Recorded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "p5ErrorMailPilot2026"
+  },
+  "pinData": {},
+  "tags": []
+}

@@ -1,0 +1,67 @@
+services:
+  n8n:
+    image: n8nio/n8n:2.48.5
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      DB_TYPE: sqlite
+      GENERIC_TIMEZONE: ${MAILPILOT_TIMEZONE:-America/Chicago}
+      TZ: ${MAILPILOT_TIMEZONE:-America/Chicago}
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      MAILPILOT_INTERNAL_TOKEN: ${MAILPILOT_INTERNAL_TOKEN:?Set MAILPILOT_INTERNAL_TOKEN in .env}
+      MAILPILOT_API_URL: http://api:8080
+      MAILPILOT_INTAKE_URL: http://n8n:5678
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mailpilot
+      POSTGRES_USER: mailpilot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mailpilot -d mailpilot"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+
+  api:
+    build: ./services/api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      DATABASE_URL: postgres://mailpilot:${POSTGRES_PASSWORD}@db:5432/mailpilot?sslmode=disable
+      APP_ENV: development
+      PORT: 8080
+      MAILPILOT_INTERNAL_TOKEN: ${MAILPILOT_INTERNAL_TOKEN}
+      MAILPILOT_FRONTEND_TOKEN: ${MAILPILOT_FRONTEND_TOKEN:-}
+      N8N_INTAKE_URL: http://n8n:5678/webhook/mailpilot-intake
+      N8N_SYNC_PROCESSING: "true"
+      EMAIL_SIMULATION_RATE_LIMIT: ${MAILPILOT_EMAIL_SIMULATION_RATE_LIMIT:-10}
+      SLA_HIGH_SECONDS: ${MAILPILOT_SLA_HIGH_SECONDS:-900}
+      SLA_MEDIUM_SECONDS: ${MAILPILOT_SLA_MEDIUM_SECONDS:-3600}
+      SLA_LOW_SECONDS: ${MAILPILOT_SLA_LOW_SECONDS:-14400}
+      MAX_RETRY_ATTEMPTS: ${MAILPILOT_MAX_RETRY_ATTEMPTS:-3}
+      RETRY_BASE_SECONDS: ${MAILPILOT_RETRY_BASE_SECONDS:-30}
+      RETRY_LEASE_SECONDS: ${MAILPILOT_RETRY_LEASE_SECONDS:-90}
+    depends_on:
+      db:
+        condition: service_healthy
+      n8n:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "/api", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  n8n_data:
+  postgres_data:

@@ -1,0 +1,215 @@
+{
+  "id": "p5SlaMailPilot2026",
+  "name": "MailPilot — SLA Escalation",
+  "active": true,
+  "nodes": [
+    {
+      "id": "b2895efe-d26c-4079-899a-5edbfb649987",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -720,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "868889e6-f059-4c2f-837d-07a6759cc9e0",
+      "name": "Get Unresolved Emails",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -490,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.MAILPILOT_API_URL + '/internal/automation/unresolved' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-MailPilot-Token",
+              "value": "={{ $env.MAILPILOT_INTERNAL_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "f2e2bc1d-69e5-472d-8a7d-9136285c50cf",
+      "name": "Calculate Deadline",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({ json: { ...item.json, deadline_passed: new Date(item.json.deadline_at).getTime() <= Date.now() } }));"
+      }
+    },
+    {
+      "id": "fe4bfdd9-21e9-458a-8498-528557ca4749",
+      "name": "SLA Deadline Passed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        10,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "721ba993-a92e-4448-81ef-dbe7b3323ee8",
+              "leftValue": "={{ $json.deadline_passed ? 'yes' : 'no' }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "12f74ed3-cab0-4559-8cca-1726409e84ac",
+      "name": "Create Escalation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        -100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MAILPILOT_API_URL + '/internal/automation/emails/' + $json.id + '/escalate' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-MailPilot-Token",
+              "value": "={{ $env.MAILPILOT_INTERNAL_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ {} }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "dad63a68-c713-41e6-887d-1f5322ebac89",
+      "name": "Record Escalation Outcome",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        510,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({ json: { notification_created: item.json.created === true, notification_id: item.json.notification_id || null } }));"
+      }
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Unresolved Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Unresolved Emails": {
+      "main": [
+        [
+          {
+            "node": "Calculate Deadline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Deadline": {
+      "main": [
+        [
+          {
+            "node": "SLA Deadline Passed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SLA Deadline Passed?": {
+      "main": [
+        [
+          {
+            "node": "Create Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Escalation": {
+      "main": [
+        [
+          {
+            "node": "Record Escalation Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "p5ErrorMailPilot2026"
+  },
+  "pinData": {},
+  "tags": []
+}

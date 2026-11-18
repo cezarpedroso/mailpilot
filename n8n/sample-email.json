@@ -1,0 +1,6 @@
+{
+  "external_message_id": "demo-001",
+  "sender": "customer@example.com",
+  "subject": "Billing issue",
+  "body": "I was charged twice this month."
+}

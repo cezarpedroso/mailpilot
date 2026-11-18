@@ -1,0 +1,417 @@
+{
+  "id": "T2Uxm4jcWMEPy2VG",
+  "name": "MailPilot — Email Intake",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mailpilot-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "f4676259-4ec3-4f73-8ef7-75e41d52da1b",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -500,
+        0
+      ],
+      "webhookId": "c985f9c1-c4ad-45f5-88ad-4f786c945c6b"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e81707e9-8d73-461d-9acb-4d6784663d18",
+              "name": "external_message_id",
+              "value": "={{ typeof $json.body?.external_message_id === 'string' ? $json.body.external_message_id.trim() : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "9f5a0614-903a-4fb8-a963-cd99409b715e",
+              "name": "sender",
+              "value": "={{ typeof $json.body?.sender === 'string' ? $json.body.sender.trim() : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "420f6f45-2731-47a8-a8a2-2d0b9c976c24",
+              "name": "subject",
+              "value": "={{ typeof $json.body?.subject === 'string' ? $json.body.subject.trim() : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "88bb3950-d2fd-4ab7-861f-c26f7ef2461f",
+              "name": "body",
+              "value": "={{ typeof $json.body?.body === 'string' ? $json.body.body.trim() : '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "eeff8fb0-eb3f-422c-a50a-4a238903da0d",
+      "name": "Normalize Email",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0917f5e6-b79b-4acb-871b-c55374988ee1",
+              "leftValue": "={{ $json.sender }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "e8441bc2-9668-467d-9d6f-992e81b5b51d",
+              "leftValue": "={{ $json.subject }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "47dbd7d8-b2bc-4897-bfec-71c9ea18dc84",
+              "leftValue": "={{ $json.body }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "88aa4778-ec2f-4820-95bb-af53ec56ef82",
+      "name": "Required Fields Present?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $('Prepare Processing Response').first().json }}",
+        "options": {
+          "responseCode": "={{ $('Prepare Processing Response').first().json.processing_status === 'processed' ? 200 : $('Prepare Processing Response').first().json.processing_status === 'needs_review' ? 422 : 502 }}"
+        }
+      },
+      "id": "89fd0a59-7759-4840-986f-e4b7df4bcadc",
+      "name": "Respond Processing Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1180,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "yzEtMZLg8xz4or9I",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "74f9550d-f247-4e92-b5e2-f5517e51506a",
+      "name": "Run AI Processing",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        240,
+        -100
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const email = $('Normalize Email').first().json;\nconst result = $input.first().json;\nconst status = ['processed','needs_review','ai_failed','draft_failed'].includes(result.processing_status) ? result.processing_status : 'ai_failed';\nreturn [{ json: {\n  success: status === 'processed',\n  email,\n  external_message_id: email.external_message_id,\n  category: typeof result.category === 'string' ? result.category : null,\n  priority: typeof result.priority === 'string' ? result.priority : null,\n  summary: typeof result.summary === 'string' ? result.summary : null,\n  needs_review: status === 'processed' ? false : true,\n  assigned_team: typeof result.assigned_team === 'string' ? result.assigned_team : null,\n  suggested_reply: typeof result.suggested_reply === 'string' ? result.suggested_reply : null,\n  processing_status: status,\n  error_code: status === 'ai_failed' && !result.processing_status ? 'subworkflow_failed' : (typeof result.error_code === 'string' ? result.error_code : null)\n} }];"
+      },
+      "id": "cc214a50-07ca-4b42-9a35-b98e2ba1158c",
+      "name": "Prepare Processing Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        470,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, error: 'validation_error', message: 'sender, subject, and body must be non-empty strings', missing_fields: ['sender', 'subject', 'body'].filter(field => !$json[field]) } }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "6d75652d-f99f-48f4-a9f4-6e170508405d",
+      "name": "Respond Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        240,
+        100
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-9000-000000000008",
+      "name": "Has API Email ID?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        670,
+        -100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "phase3-email-id",
+              "leftValue": "={{ $('Webhook').first().json.body?.email_id || '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "phase3-status",
+              "leftValue": "={{ ['processed','needs_review'].includes($json.processing_status) ? 'yes' : 'no' }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "00000000-0000-4000-9000-000000000009",
+      "name": "Save Classification to Go",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        -200
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.MAILPILOT_API_URL + '/internal/emails/' + $('Webhook').first().json.body.email_id + '/classification' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-MailPilot-Token",
+              "value": "={{ $env.MAILPILOT_INTERNAL_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { category: $('Prepare Processing Response').first().json.category, priority: $('Prepare Processing Response').first().json.priority, assigned_team: $('Prepare Processing Response').first().json.assigned_team, summary: $('Prepare Processing Response').first().json.summary, needs_review: $('Prepare Processing Response').first().json.needs_review, processing_status: $('Prepare Processing Response').first().json.processing_status } }}",
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "00000000-0000-4000-9000-000000000010",
+      "name": "Save Draft to Go",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1080,
+        -200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MAILPILOT_API_URL + '/internal/emails/' + $('Webhook').first().json.body.email_id + '/drafts' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-MailPilot-Token",
+              "value": "={{ $env.MAILPILOT_INTERNAL_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { content: $('Prepare Processing Response').first().json.suggested_reply } }}",
+        "options": {
+          "timeout": 10000
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Email": {
+      "main": [
+        [
+          {
+            "node": "Required Fields Present?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Required Fields Present?": {
+      "main": [
+        [
+          {
+            "node": "Run AI Processing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run AI Processing": {
+      "main": [
+        [
+          {
+            "node": "Prepare Processing Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Processing Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Processing Response": {
+      "main": [
+        [
+          {
+            "node": "Has API Email ID?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has API Email ID?": {
+      "main": [
+        [
+          {
+            "node": "Save Classification to Go",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Processing Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Classification to Go": {
+      "main": [
+        [
+          {
+            "node": "Save Draft to Go",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Draft to Go": {
+      "main": [
+        [
+          {
+            "node": "Respond Processing Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "p5ErrorMailPilot2026"
+  },
+  "pinData": {},
+  "tags": []
+}
