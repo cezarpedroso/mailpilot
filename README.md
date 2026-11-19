@@ -4,9 +4,9 @@ MailPilot é uma prova de conceito de automação inteligente de e-mails.
 
 O sistema recebe uma mensagem, usa IA para identificar assunto e prioridade, encaminha para o time correto e sugere uma resposta. A pessoa responsável pode revisar, editar, aprovar ou rejeitar o rascunho. **Nenhum e-mail é enviado automaticamente.**
 
-![n8n workflow diagram}(docs/images/workflows/workflow.png) 
-![Inbox do MailPilot](docs/images/dashboard/inbox.png)
+![n8n workflow diagram](docs/images/workflows/workflow.png)
 
+![Inbox do MailPilot](docs/images/dashboard/inbox.png)
 ## O que a demonstração mostra
 
 - Inbox com classificação, prioridade, time responsável e resumo.
