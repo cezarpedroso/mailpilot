@@ -4,6 +4,17 @@ MailPilot é uma prova de conceito de automação inteligente de e-mails.
 
 O sistema recebe uma mensagem, usa IA para identificar assunto e prioridade, encaminha para o time correto e sugere uma resposta. A pessoa responsável pode revisar, editar, aprovar ou rejeitar o rascunho. **Nenhum e-mail é enviado automaticamente.**
 
+## Acesso à demonstração
+
+Use estas credenciais somente para a demonstração:
+
+```text
+E-mail: test@gmail.com
+Senha: Password123!
+```
+LINK: https://mailpilot-beta-woad.vercel.app/
+
+
 ![n8n workflow diagram](docs/images/workflows/workflow.png)
 
 ![Inbox do MailPilot](docs/images/dashboard/inbox.png)
@@ -15,17 +26,6 @@ O sistema recebe uma mensagem, usa IA para identificar assunto e prioridade, enc
 - Monitoramento de filas, tentativas, SLA e falhas.
 - Recuperação automática quando o n8n fica indisponível.
 - Cinco workflows n8n documentados com imagens reais do canvas.
-
-## Acesso à demonstração
-
-Use estas credenciais somente para a demonstração:
-
-```text
-E-mail: test@gmail.com
-Senha: Password123!
-```
-
-Essas credenciais são de teste e não devem ser reutilizadas em nenhum outro serviço.
 
 ## Arquitetura
 
@@ -100,42 +100,6 @@ Registra falhas inesperadas sem salvar chaves ou o conteúdo completo do e-mail.
 | ![Analytics](docs/images/dashboard/analytics.png) | ![Automações](docs/images/dashboard/automations.png) |
 
 ![Detalhes de um e-mail](docs/images/dashboard/email-detail.png)
-
-## Como executar localmente
-
-Pré-requisitos: Docker Desktop, Docker Compose, Node.js e npm.
-
-```powershell
-Copy-Item .env.example .env
-docker compose up -d --build
-
-cd apps/web
-npm install
-npm run dev
-```
-
-Abra o [dashboard](http://localhost:3000), o [n8n](http://localhost:5678) ou a [API](http://localhost:8080/health).
-
-Os volumes do Docker preservam os dados do n8n e do PostgreSQL. Não use `docker compose down -v` se quiser manter os dados.
-
-## Configuração do n8n e deploy
-
-Em uma instalação nova, importe os cinco arquivos JSON de `n8n/workflows/` e configure sua própria credencial Header Auth do OpenRouter nos dois nós de IA. As chaves não ficam nos arquivos exportados.
-
-Para implantação em nuvem, consulte [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). O guia explica Vercel, Railway, variáveis de ambiente, autenticação e rede privada.
-
-## Testes
-
-```powershell
-docker run --rm -v "${PWD}/services/api:/src" -w /src golang:1.25-alpine go test ./...
-
-cd apps/web
-npx tsc --noEmit
-npm run lint
-npm run build
-```
-
-Também existem testes de integração em `n8n/tests/`, incluindo o fluxo real Go → n8n → OpenRouter → PostgreSQL.
 
 ## Limitações da prova de conceito
 
